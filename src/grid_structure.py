@@ -1,8 +1,10 @@
+# --- IMPORTATIONS ---
 from dataclasses import dataclass
 from typing import List, Tuple
 import random
 
-# Une petite classe pour stocker les infos d'un mot à trouver
+# --- STRUCTURE DE DONNÉES ---
+# Cette classe stocke les infos d'un emplacement de mot (Slot)
 @dataclass
 class WordSlot:
     id: int             # Identifiant unique (0, 1, 2...)
@@ -12,6 +14,7 @@ class WordSlot:
     length: int         # Longueur du mot
     cells: List[Tuple[int, int]] # Liste des coordonnées (row, col) occupées
 
+# --- ANALYSEUR DE GRILLE ---
 class GridStructure:
     def __init__(self, grid_layout: List[str]):
         """
@@ -96,6 +99,7 @@ class GridStructure:
                     })
 
     def print_report(self):
+        """Affiche un résumé de l'analyse dans la console."""
         print(f"\n--- Analyse de la Grille {self.rows}x{self.cols} ---")
         print(f"Nombre de mots à trouver (Slots) : {len(self.slots)}")
         print(f"Nombre de croisements (Contraintes) : {len(self.intersections)}")
@@ -108,10 +112,11 @@ class GridStructure:
         for i, inter in enumerate(self.intersections[:5]): # Affiche les 5 premiers
             print(f"Le mot ID {inter['id_h']} (idx {inter['index_h']}) croise le mot ID {inter['id_v']} (idx {inter['index_v']})")
 
+# --- TEST UNITAIRE ---
 if __name__ == "__main__":
     # --- GÉNÉRATION D'UNE GRILLE ALÉATOIRE 5x5 ---
-    ROWS, COLS = 6, 6
-    NB_NOIRES = 9
+    ROWS, COLS = 12, 12
+    NB_NOIRES = 20
 
     # 1. Création grille vide
     # On utilise une liste de listes pour pouvoir modifier facilement

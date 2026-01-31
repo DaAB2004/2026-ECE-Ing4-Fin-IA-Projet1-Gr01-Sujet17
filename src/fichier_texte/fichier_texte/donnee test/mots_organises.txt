@@ -1,4 +1,0 @@
-Longueur 3 (4 mots) : ['ETE', 'RAT', 'ART', 'AME']
-Longueur 4 (3 mots) : ['FETE', 'NOEL', 'TATE']
-Longueur 5 (1 mots) : ['TARTE']
-Longueur 6 (1 mots) : ['PYTHON']

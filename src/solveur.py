@@ -1,3 +1,4 @@
+# --- IMPORTATIONS ---
 import os
 import random
 import ast
@@ -12,14 +13,16 @@ except ImportError:
 
 # --- CONFIGURATION ---
 # Chemin absolu vers le dictionnaire généré par recuperation_dico.py
-PATH_DICO = r"C:\Users\antoi\OneDrive\Documents\ING4\S2\IA\fichier_texte\donnees\grand_dico_organise.txt"
+PATH_DICO = r"C:\Users\antoi\OneDrive\Documents\ING4\S2\IA\fichier_texte\donne_reponse\dico_definitions_organise.txt"
 
+# --- CLASSE DE RÉSOLUTION (IA) ---
 class CrosswordSolver:
     def __init__(self, grid_layout, dictionary_path):
         self.grid_layout = grid_layout
         self.structure = GridStructure(grid_layout)
         self.dictionary_path = dictionary_path
         self.words_by_length = {}
+        self.definitions = {}  # Stockage des définitions { "MOT": "Définition" }
         self.solution = None
         self.start_time = 0
         
@@ -38,23 +41,31 @@ class CrosswordSolver:
                 for line in f:
                     line = line.strip()
                     if not line: continue
-                    # Format attendu : "Longueur 2 (X mots) : ['MOT1', 'MOT2']"
+                    
+                    # Nouveau format : "MOT : ['Def1', 'Def2']"
+                    # Les lignes de séparation commencent par "---"
+                    if line.startswith("---"):
+                        continue
+                        
                     if " : " in line:
-                        parts = line.split(" : ")
-                        list_str = parts[1] # La partie liste ['A', 'B']
-                        meta = parts[0]     # La partie "Longueur X..."
+                        parts = line.split(" : ", 1)
+                        word = parts[0].strip()
+                        defs_str = parts[1]
                         try:
-                            length = int(meta.split()[1])
-                            # ast.literal_eval transforme la string en vraie liste Python de manière sécurisée
-                            words = ast.literal_eval(list_str)
-                            self.words_by_length[length] = words
+                            defs = ast.literal_eval(defs_str)
+                            length = len(word)
+                            if length not in self.words_by_length:
+                                self.words_by_length[length] = []
+                            self.words_by_length[length].append(word)
+                            # On garde la première définition
+                            self.definitions[word] = defs[0] if defs else "Pas de définition disponible."
                         except Exception as e:
                             continue
             print(f"Dictionnaire chargé ! {len(self.words_by_length)} longueurs de mots disponibles.")
         except Exception as e:
             print(f"Erreur globale lecture dico : {e}")
 
-    def solve(self):
+    def solve(self, render_html=True):
         """Lance la résolution avec Google OR-Tools (CP-SAT)."""
         if cp_model is None:
             print("\n!!! ERREUR CRITIQUE !!!")
@@ -119,7 +130,8 @@ class CrosswordSolver:
             
             self.solution = assignment
             self.print_grid(assignment)
-            self.generate_html(assignment)
+            if render_html:
+                self.generate_html(assignment)
             
         elif status == cp_model.UNKNOWN:
             print("\n=== TEMPS ÉCOULÉ ===")
@@ -242,39 +254,45 @@ class CrosswordSolver:
         print(f"Visualisation générée : {path}")
         webbrowser.open(path)
 
+# --- TEST RAPIDE (Si lancé directement) ---
 if __name__ == "__main__":
     # --- TEST RAPIDE ---
     ROWS, COLS = 12, 12
+    NB_NOIRES = 20
     
-    print(f"--- Recherche d'une grille 12x12 (24 cases noires) ---")
+    print(f"--- Recherche d'une grille 12x12 (20 cases noires) ---")
     
-    grid_str = []
-    
-    while True:
-        # Nombre de cases noires fixe
-        nb_noires = 24
+    model = cp_model.CpModel()
+    grid_vars = {}
+
+    for r in range(ROWS):
+        for c in range(COLS):
+            grid_vars[(r, c)] = model.NewBoolVar(f'c_{r}_{c}')
+
+    model.Add(sum(grid_vars.values()) == NB_NOIRES)
+
+    for r in range(ROWS):
+        for c in range(COLS):
+            left = grid_vars[(r, c-1)] if c > 0 else 1
+            right = grid_vars[(r, c+1)] if c < COLS - 1 else 1
+            top = grid_vars[(r-1, c)] if r > 0 else 1
+            bottom = grid_vars[(r+1, c)] if r < ROWS - 1 else 1
+
+            model.Add(left + right < 2).OnlyEnforceIf(grid_vars[(r, c)].Not())
+            model.Add(top + bottom < 2).OnlyEnforceIf(grid_vars[(r, c)].Not())
+
+    solver_gen = cp_model.CpSolver()
+    solver_gen.parameters.random_seed = random.randint(0, 2**30)
+    status = solver_gen.Solve(model)
+
+    if status == cp_model.FEASIBLE or status == cp_model.OPTIMAL:
         grid = [['.' for _ in range(COLS)] for _ in range(ROWS)]
-        count = 0
+        for r in range(ROWS):
+            for c in range(COLS):
+                if solver_gen.Value(grid_vars[(r, c)]) == 1:
+                    grid[r][c] = '#'
+        grid_str = ["".join(row) for row in grid]
         
-        # Placement aléatoire
-        while count < nb_noires:
-            r = random.randint(0, ROWS - 1)
-            c = random.randint(0, COLS - 1)
-            if grid[r][c] == '.':
-                grid[r][c] = '#'
-                count += 1
-        
-        # Vérification des contraintes
-        current_grid_str = ["".join(row) for row in grid]
-        analyseur = GridStructure(current_grid_str)
-        
-        nb_mots_1_lettre = sum(1 for s in analyseur.slots if s.length == 1)
-        
-        if nb_mots_1_lettre <= 1:
-            print(f"Grille trouvée : {nb_noires} cases noires, {nb_mots_1_lettre} mot(s) de 1 lettre.")
-            grid_str = current_grid_str
-            break
-    
-    # Résolution
-    solver = CrosswordSolver(grid_str, PATH_DICO)
-    solver.solve()
+        print("Grille générée pour le test. Lancement du solveur...")
+        solver = CrosswordSolver(grid_str, PATH_DICO)
+        solver.solve()
